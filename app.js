@@ -1436,6 +1436,7 @@ const EXTRA_ICONS={
  heart:'<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/>',
  comment:'<path d="M20 12a8 8 0 0 1-8 8H5l1.5-3A8 8 0 1 1 20 12Z"/>',
  trash:'<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/>',
+ note:'<path d="M6 3h9l4 4v14H6V3Z"/><path d="M15 3v4h4M9 12h7M9 16h7"/>',
  music:'<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>'
 };
 
@@ -1857,36 +1858,43 @@ async function deleteNote(){
 }
 /* =====================  PHONE BACK BUTTON (layers)  ===================== */
 const APP_VERSION="2026-10-14-a";
-const nav={depth:0,guard:false,busy:false,timer:null,noClickUntil:0};
+const nav={depth:0,guard:false,busy:false,timer:null,noClickUntil:0,native:false};
+function nativeApp(){
+ try{const C=window.Capacitor;if(C&&typeof C.isNativePlatform==="function"&&C.isNativePlatform()&&C.Plugins&&C.Plugins.App)return C.Plugins.App}catch{}
+ return null;
+}
 function layerCount(){
  let n=0;
  if(document.getElementById("mediaView"))n++;
  if(document.getElementById("storyView"))n++;
  if(document.getElementById("modalRoot"))n++;
+ if(document.getElementById("memoEditor"))n++;
  if(document.getElementById("contactPage"))n++;
  if(state.call||state.gcall||state.ginvite||document.getElementById("gcallView"))n++;
  if(state.user&&state.activeChat!==null&&(state.page==="chats"||state.page==="groups"))n++;
  if(state.user&&state.secretOpen)n++;
  if(state.user&&state.page!=="chats")n++;
+ if(state.user&&state.page==="memos")n++;
  return n;
 }
 function topLayerClose(){
  if(document.getElementById("mediaView")){closeMedia();return true}
  if(document.getElementById("storyView")){closeStory();return true}
  if(document.getElementById("modalRoot")){if(secretResolve)secretCancel();else closeModal();return true}
+ if(document.getElementById("memoEditor")){closeMemoEditor();return true}
  if(document.getElementById("contactPage")){closeContactPage();return true}
  if(state.call||state.gcall||state.ginvite||document.getElementById("gcallView"))return true;
  if(state.activeChat!==null&&(state.page==="chats"||state.page==="groups")){state.activeChat=null;state.messages=[];render();return true}
  if(state.secretOpen){state.secretOpen=false;render();return true}
- if(state.page!=="chats"){state.page="chats";state.shortsMounted=false;render();return true}
+ if(state.page!=="chats"){state.page=(state.page==="memos")?"profile":"chats";state.shortsMounted=false;render();return true}
  return false;
 }
 function ensureGuard(){
- if(!state.user||nav.guard)return;
+ if(nav.native||!state.user||nav.guard)return;
  try{history.pushState({nt:"guard"},"");nav.guard=true}catch(e){console.warn("nav guard",e)}
 }
 function syncNav(){
- if(nav.busy)return;
+ if(nav.native||nav.busy)return;
  const want=state.user?layerCount():0;
  try{
   if(nav.depth<want){
@@ -1904,8 +1912,18 @@ function showExitDialog(){
  document.body.insertAdjacentHTML("beforeend",`<div id="exitDlg" class="modal-back over-story"><div class="modal"><h3>Exit NTalk?</h3><p class="muted">Press back again or tap Yes to close the app.</p><div class="modal-actions"><button class="m-cancel" onclick="exitNo()">No</button><button class="m-ok" onclick="exitYes()">Yes</button></div></div></div>`);
 }
 function exitNo(){document.getElementById("exitDlg")?.remove();ensureGuard()}
-function exitYes(){document.getElementById("exitDlg")?.remove();nav.guard=false;history.back();setTimeout(()=>{try{window.close()}catch{}},250)}
+function exitYes(){document.getElementById("exitDlg")?.remove();const NA=nativeApp();if(NA&&NA.exitApp){NA.exitApp();return}nav.guard=false;history.back();setTimeout(()=>{try{window.close()}catch{}},250)}
 function setupBackNav(){
+ const NA=nativeApp();
+ if(NA&&typeof NA.addListener==="function"){
+  nav.native=true;
+  NA.addListener("backButton",()=>{
+   if(document.getElementById("exitDlg")){NA.exitApp();return}
+   if(state.user&&topLayerClose())return;
+   showExitDialog();
+  });
+  return;
+ }
  window.addEventListener("popstate",()=>{
   if(nav.busy){nav.busy=false;clearTimeout(nav.timer);syncNav();return}
   if(nav.depth>0){nav.depth--;topLayerClose();syncNav();return}
@@ -2049,7 +2067,7 @@ function profileView(){
  const u=state.user||{};
  const photo=u.avatar_url?`<img src="${esc(u.avatar_url)}" alt="">`:esc(avatarName(meName()));
  const row=(fn,icon,title,sub)=>`<button class="pf-row" onclick="${fn}"><span class="pf-ic">${ico(icon)}</span><span class="pf-tx"><b>${title}</b>${sub?`<small>${sub}</small>`:""}</span><span class="pf-chev">›</span></button>`;
- return `<section class="full-page profile pf"><div class="pf-hero"><label class="pf-photo" title="Change photo">${photo}<span class="pf-cam">${ico("camera")}</span><input type="file" accept="image/*" hidden onchange="changeAvatar(this.files[0])"></label><h2>${esc(meName())}</h2><p class="pf-user">${esc(u.username||"@user")}</p><p class="pf-mail">${esc(u.email||"")}</p><div class="pf-actions"><button onclick="editProfile()">${ico("user")}<span>Edit profile</span></button><button onclick="openNoteComposer()">${ico("music")}<span>Note</span></button><button onclick="openStatusComposer()">${ico("camera")}<span>Status</span></button></div></div><div class="pf-card">${row("editProfile()","user","Edit profile","Name and username")}${row("toggleLastSeen()","user","Last seen &amp; online",state.shareLastSeen===false?"Nobody":"Everyone")}${row("enableNotifications()","chat","Notifications",notifStatus())}${row("openSecret()","lock","Secret chats","Hidden chats with your password")}</div><div class="pf-card">${row("toggleTheme()","theme","Appearance",state.theme==="dark"?"Dark":"Light")}${row("installApp()","download","Install app","Add NTalk to your home screen")}${row("forceUpdate()","download","Update app","Version "+APP_VERSION)}${row("alert('Email: '+state.user.email)","user","Account",esc(u.email||""))}</div><button class="pf-logout" onclick="logout()">Log out</button></section>`;
+ return `<section class="full-page profile pf"><div class="pf-hero"><label class="pf-photo" title="Change photo">${photo}<span class="pf-cam">${ico("camera")}</span><input type="file" accept="image/*" hidden onchange="changeAvatar(this.files[0])"></label><h2>${esc(meName())}</h2><p class="pf-user">${esc(u.username||"@user")}</p><p class="pf-mail">${esc(u.email||"")}</p><div class="pf-actions"><button onclick="editProfile()">${ico("user")}<span>Edit profile</span></button><button onclick="openNoteComposer()">${ico("music")}<span>Note</span></button><button onclick="openStatusComposer()">${ico("camera")}<span>Status</span></button></div></div><div class="pf-card">${row("openMemos()","note","My notes","Private notes only you can see")}${row("editProfile()","user","Edit profile","Name and username")}${row("toggleLastSeen()","user","Last seen &amp; online",state.shareLastSeen===false?"Nobody":"Everyone")}${row("enableNotifications()","chat","Notifications",notifStatus())}${row("openSecret()","lock","Secret chats","Hidden chats with your password")}</div><div class="pf-card">${row("toggleTheme()","theme","Appearance",state.theme==="dark"?"Dark":"Light")}${row("installApp()","download","Install app","Add NTalk to your home screen")}${row("forceUpdate()","download","Update app","Version "+APP_VERSION)}${row("alert('Email: '+state.user.email)","user","Account",esc(u.email||""))}</div><button class="pf-logout" onclick="logout()">Log out</button></section>`;
 }
 /* =====================  DISAPPEARING MESSAGES + DELETE FOR EVERYONE  ===================== */
 const DISAPPEAR_OPTS=[[0,"Off"],[5,"5 seconds"],[10,"10 seconds"],[300,"5 minutes"],[86400,"24 hours"]];
@@ -2129,6 +2147,124 @@ function onMessageUpdate(payload){
  state.messages[i]={...o,delivered_at:m.delivered_at,seen_at:m.seen_at,deleted_at:m.deleted_at,disappear_after:(m.disappear_after!==undefined?m.disappear_after:o.disappear_after),...(m.deleted_at?{content:null,file_path:null,file_name:null,mime_type:null,_url:null}:{})};
  render();
 }
+/* =====================  PRIVATE NOTES PAGE (memos)  ===================== */
+let memoSaveTimer=null,memoChain=Promise.resolve();
+const MEMO_COLORS=[["default","Default"],["yellow","Yellow"],["green","Green"],["blue","Blue"],["pink","Pink"],["gray","Gray"]];
+function fmtMemoDate(ts){
+ const d=new Date(ts);if(isNaN(d.getTime()))return "";
+ return d.toDateString()===new Date().toDateString()?d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):d.toLocaleDateString([],{day:"numeric",month:"short"});
+}
+function sortMemos(){state.memos.sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||String(b.updated_at||"").localeCompare(String(a.updated_at||"")))}
+function upsertLocalMemo(row){
+ if(!state.memos)state.memos=[];
+ const i=state.memos.findIndex(x=>x.id===row.id);
+ if(i>=0)state.memos[i]={...state.memos[i],...row};else state.memos.push(row);
+ sortMemos();refreshMemoList();
+}
+function removeLocalMemo(id){state.memos=(state.memos||[]).filter(x=>x.id!==id);refreshMemoList()}
+async function loadMemos(){
+ if(!hasSupabase||!uid())return;
+ const {data,error}=await sb.from("memos").select("*").eq("owner_id",uid()).order("pinned",{ascending:false}).order("updated_at",{ascending:false});
+ if(error){console.warn("memos",error);state.memosError=error.message;refreshMemoList();return}
+ state.memosError="";state.memos=data||[];refreshMemoList();
+}
+function openMemos(){state.page="memos";state.activeChat=null;state.memoQuery="";render();loadMemos()}
+function memosBack(){state.page="profile";render()}
+function memoListHtml(){
+ if(state.memosError)return `<div class="empty-small">Could not load your notes.<br><small>${esc(state.memosError)}</small><br>Run supabase_memos.sql in Supabase first.</div>`;
+ const q=String(state.memoQuery||"").trim().toLowerCase();
+ const all=(state.memos||[]).filter(m=>!q||String(m.title||"").toLowerCase().includes(q)||String(m.body||"").toLowerCase().includes(q));
+ if(!all.length)return `<div class="empty-small">${q?"No notes found.":"No notes yet.<br>Tap + to write your first note."}</div>`;
+ const card=m=>`<button class="mm-card mc-${esc(m.color||"default")}" onclick="openMemo('${m.id}')"><b>${esc(m.title||"Untitled")}</b><span>${esc(String(m.body||"").slice(0,220))}</span><small>${m.pinned?"📌 ":""}${esc(fmtMemoDate(m.updated_at))}</small></button>`;
+ const pinned=all.filter(m=>m.pinned),others=all.filter(m=>!m.pinned);
+ return (pinned.length?`<div class="sec-title">Pinned</div>${pinned.map(card).join("")}`:"")+(others.length?(pinned.length?`<div class="sec-title">Others</div>`:"")+others.map(card).join(""):"");
+}
+function refreshMemoList(){const el=document.getElementById("memoList");if(el)el.innerHTML=memoListHtml()}
+function memosView(){
+ return `<section class="full-page memos"><header class="mm-head"><button class="cp-back" onclick="memosBack()" aria-label="Back">‹</button><h2>Notes</h2><button class="round" onclick="newMemo()" title="New note">${ico("plus")}</button></header><div class="search">${ico("search")}<input id="memoSearch" autocomplete="off" placeholder="Search notes..." value="${esc(state.memoQuery||"")}" oninput="state.memoQuery=this.value;refreshMemoList()"></div><div id="memoList" class="mm-list">${memoListHtml()}</div></section>`;
+}
+/* ---- editor ---- */
+function newMemo(){openMemoEditor({id:null,title:"",body:"",color:"default",pinned:false})}
+function openMemo(id){const m=(state.memos||[]).find(x=>x.id===id);if(m)openMemoEditor({...m})}
+function openMemoEditor(m){
+ document.getElementById("memoEditor")?.remove();
+ state.memoEdit={id:m.id||null,title:m.title||"",body:m.body||"",color:m.color||"default",pinned:!!m.pinned,dirty:false};
+ document.body.insertAdjacentHTML("beforeend",`<div id="memoEditor" class="mpage mc-${esc(state.memoEdit.color)}"><header class="mp-head"><button class="cp-back" onclick="closeMemoEditor()" aria-label="Back">‹</button><span id="mpStatus" class="mp-status"></span><button id="mpPin" class="mp-ic" onclick="toggleMemoPin()" title="Pin">📌</button><button class="mp-ic" onclick="openMemoColors()" title="Colour">🎨</button><button class="mp-ic" onclick="deleteMemoFromEditor()" title="Delete">${ico("trash")}</button></header><div class="mp-body"><input id="mpTitle" class="mp-title" maxlength="120" placeholder="Title" value="${esc(state.memoEdit.title)}" oninput="memoChanged()"><textarea id="mpBody" class="mp-text" maxlength="20000" placeholder="Write your note..." oninput="memoChanged()">${esc(state.memoEdit.body)}</textarea></div></div>`);
+ paintMemoPin();
+ if(!m.id)document.getElementById("mpTitle")?.focus();
+}
+function paintMemoPin(){const b=document.getElementById("mpPin"),e=state.memoEdit;if(b&&e)b.classList.toggle("on",!!e.pinned)}
+function setMemoStatus(t){const el=document.getElementById("mpStatus");if(el)el.textContent=t||""}
+function readMemoFields(){
+ const e=state.memoEdit;if(!e)return;
+ const t=document.getElementById("mpTitle"),b=document.getElementById("mpBody");
+ if(t)e.title=t.value;if(b)e.body=b.value;
+}
+function memoChanged(){
+ const e=state.memoEdit;if(!e)return;
+ readMemoFields();e.dirty=true;setMemoStatus("Typing…");
+ clearTimeout(memoSaveTimer);memoSaveTimer=setTimeout(()=>saveMemoNow(),700);
+}
+function saveMemoNow(e){
+ clearTimeout(memoSaveTimer);
+ const target=e||state.memoEdit;if(!target)return memoChain;
+ memoChain=memoChain.then(()=>doSaveMemo(target)).catch(err=>console.warn("memo save",err));
+ return memoChain;
+}
+async function doSaveMemo(e){
+ if(!e.dirty)return;
+ const title=String(e.title||"").trim(),body=String(e.body||"").trim();
+ if(!title&&!body){if(state.memoEdit===e)setMemoStatus("");return}
+ e.dirty=false;if(state.memoEdit===e)setMemoStatus("Saving…");
+ const row={title:title||null,body:body||null,color:e.color||"default",pinned:!!e.pinned};
+ const res=e.id
+  ?await sb.from("memos").update(row).eq("id",e.id).eq("owner_id",uid()).select().single()
+  :await sb.from("memos").insert({...row,owner_id:uid()}).select().single();
+ if(res.error){e.dirty=true;if(state.memoEdit===e)setMemoStatus("Not saved. Check your connection");console.warn("memo",res.error);return}
+ e.id=res.data.id;upsertLocalMemo(res.data);
+ if(state.memoEdit===e)setMemoStatus("Saved ✓");
+}
+function toggleMemoPin(){const e=state.memoEdit;if(!e)return;e.pinned=!e.pinned;e.dirty=true;paintMemoPin();saveMemoNow()}
+function openMemoColors(){
+ const e=state.memoEdit;if(!e)return;
+ closeModal();
+ document.body.insertAdjacentHTML("beforeend",`<div id="modalRoot" class="modal-back over-story" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>Colour</h3><div class="mm-colors">${MEMO_COLORS.map(([k,l])=>`<button class="mm-dot mc-${k} ${k===e.color?"on":""}" onclick="setMemoColor('${k}')" title="${l}" aria-label="${l}"></button>`).join("")}</div><div class="modal-actions"><button class="m-ok" onclick="closeModal()">Done</button></div></div></div>`);
+}
+function setMemoColor(k){
+ const e=state.memoEdit;if(!e)return;
+ e.color=k;e.dirty=true;
+ const el=document.getElementById("memoEditor");
+ if(el)el.className="mpage mc-"+k;
+ closeModal();saveMemoNow();
+}
+function closeMemoEditor(){
+ const el=document.getElementById("memoEditor"),e=state.memoEdit;
+ if(e)readMemoFields();
+ if(el)el.remove();
+ state.memoEdit=null;
+ if(e)finalizeMemo(e);
+}
+async function finalizeMemo(e){
+ clearTimeout(memoSaveTimer);
+ const empty=!String(e.title||"").trim()&&!String(e.body||"").trim();
+ if(empty){
+  if(e.id){await memoChain;const {error}=await sb.from("memos").delete().eq("id",e.id).eq("owner_id",uid());if(!error)removeLocalMemo(e.id)}
+  return;
+ }
+ if(e.dirty)await saveMemoNow(e);
+}
+async function deleteMemoFromEditor(){
+ const e=state.memoEdit;if(!e)return;
+ if(!confirm("Delete this note?"))return;
+ clearTimeout(memoSaveTimer);
+ document.getElementById("memoEditor")?.remove();
+ state.memoEdit=null;
+ await memoChain;
+ if(e.id){
+  const {error}=await sb.from("memos").delete().eq("id",e.id).eq("owner_id",uid());
+  if(error)alert(error.message);else removeLocalMemo(e.id);
+ }
+}
 async function initBackend(){ await loadNicknames(); await loadPrefs();
  await loadPeople();await loadChats();
  await subscribeMessageChannel();await setupTyping();await initPresence();await setupSignaling();
@@ -2149,7 +2285,7 @@ function render(){
  if(!state.user){app.innerHTML=loginView();return}
  if(state.user.needsSetup){app.innerHTML=setupView();return}
  if(state.page!=="chats")state.secretOpen=false;
- const center=state.page==="calls"?callsView():state.page==="groups"?groupsView():state.page==="profile"?profileView():state.page==="shorts"?shortsView():chatList();
+ const center=state.page==="calls"?callsView():state.page==="groups"?groupsView():state.page==="profile"?profileView():state.page==="shorts"?shortsView():state.page==="memos"?memosView():chatList();
  app.innerHTML=`<div class="shell">${sidebar()}<main class="main">${center}${(state.page==="chats"||state.page==="groups")&&state.activeChat!==null?conversation():state.page==="groups"?`<div class="empty"><div class="logo">N</div><h2>Select a group</h2><p>Or tap <b>+</b> to create a new one.</p></div>`:state.page==="chats"?`<div class="empty"><div class="logo">N</div><h2>Select a chat</h2><p>Open <b>People</b> to see all registered NTalk users.</p></div>`:""}</main></div>`;
  const _n=document.getElementById("msg");if(_n&&_kv){_n.value=_kv;if(_kf)_n.focus()}
  const _dn=document.getElementById("dirSearch");if(_dn&&_dv!==null){if(_dn.value!==_dv)_dn.value=_dv;if(_df){_dn.focus();try{_dn.setSelectionRange(_ds,_ds)}catch{}}}
