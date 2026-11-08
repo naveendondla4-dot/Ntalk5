@@ -580,3 +580,10 @@ body[data-theme="light"] .mc-gray{--mc:#e6e8ec}
 .mm-colors{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;padding:6px 0}
 .mm-dot{width:42px;height:42px;border-radius:50%;background:var(--mc);outline:1px solid var(--muted)}
 .mm-dot.on{box-shadow:0 0 0 3px var(--accent2)}
+
+/* ===== NTalk: manual save button in the note editor ===== */
+.mp-save{padding:9px 18px;border-radius:12px;background:var(--accent2);color:#04202a;font-weight:700;margin-left:4px}
+.mp-save:disabled{opacity:.4}
+
+/* ===== NTalk: delete account link ===== */
+.pf-delete{display:block;margin:12px 12px 0;width:calc(100% - 24px);padding:12px;background:transparent;color:var(--muted);font-size:13px;text-decoration:underline}

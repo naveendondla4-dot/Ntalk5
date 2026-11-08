@@ -365,6 +365,14 @@ async function subscribeMessageChannel(){
    showToast("Disappearing messages",nv?`Messages vanish ${disappearLabel(nv)} after they are seen`:"Turned off","");
    render();
  })
+ .on("postgres_changes",{event:"DELETE",schema:"public",table:"chats"},payload=>{
+   const id=payload.old&&payload.old.id;if(!id)return;
+   const k=state.chats.findIndex(c=>c.id===id);if(k<0)return;
+   const wasOpen=state.activeChat===k;
+   state.chats.splice(k,1);
+   if(wasOpen){state.activeChat=null;state.messages=[]}else if(state.activeChat!==null&&state.activeChat>k)state.activeChat--;
+   loadPeople().then(()=>render());
+ })
  .subscribe();
 }
 async function onNewMessage(payload){
@@ -1466,7 +1474,7 @@ function chatList(){
  if(state.secretOpen)return secretList();
  const showSearch=state.searchOpen||!!String(state.dirQuery||"").trim();
  return `<section class="chat-list">
- <header class="list-head"><div><h2 class="tap" onclick="openSecret()">Chats</h2><p>Your chats and all users</p></div><div class="lh-actions"><button class="round" onclick="toggleSearch()" title="Search">${ico("search")}</button><button class="round" onclick="newChatPlus()" title="Find people">${ico("plus")}</button></div></header>
+ <header class="list-head"><div><h2 class="tap" onclick="openSecret()">Chats</h2><p>Your chats and all users</p></div><div class="lh-actions"><button class="round" onclick="openMemos('chats')" title="Notes">${ico("note")}</button><button class="round" onclick="toggleSearch()" title="Search">${ico("search")}</button><button class="round" onclick="newChatPlus()" title="Find people">${ico("plus")}</button></div></header>
  ${showSearch?`<div class="search">${ico("search")}<input id="dirSearch" autocomplete="off" placeholder="Search name or username..." value="${esc(state.dirQuery||"")}" oninput="filterDirectory(this.value)"></div>`:""}
  ${statusRow()}
  <div id="directoryRows">${directoryHtml()}</div>
@@ -1874,7 +1882,7 @@ function layerCount(){
  if(state.user&&state.activeChat!==null&&(state.page==="chats"||state.page==="groups"))n++;
  if(state.user&&state.secretOpen)n++;
  if(state.user&&state.page!=="chats")n++;
- if(state.user&&state.page==="memos")n++;
+ if(state.user&&state.page==="memos"&&state.memoFrom==="profile")n++;
  return n;
 }
 function topLayerClose(){
@@ -1886,7 +1894,7 @@ function topLayerClose(){
  if(state.call||state.gcall||state.ginvite||document.getElementById("gcallView"))return true;
  if(state.activeChat!==null&&(state.page==="chats"||state.page==="groups")){state.activeChat=null;state.messages=[];render();return true}
  if(state.secretOpen){state.secretOpen=false;render();return true}
- if(state.page!=="chats"){state.page=(state.page==="memos")?"profile":"chats";state.shortsMounted=false;render();return true}
+ if(state.page!=="chats"){state.page=(state.page==="memos"&&state.memoFrom==="profile")?"profile":"chats";state.shortsMounted=false;render();return true}
  return false;
 }
 function ensureGuard(){
@@ -2067,7 +2075,7 @@ function profileView(){
  const u=state.user||{};
  const photo=u.avatar_url?`<img src="${esc(u.avatar_url)}" alt="">`:esc(avatarName(meName()));
  const row=(fn,icon,title,sub)=>`<button class="pf-row" onclick="${fn}"><span class="pf-ic">${ico(icon)}</span><span class="pf-tx"><b>${title}</b>${sub?`<small>${sub}</small>`:""}</span><span class="pf-chev">›</span></button>`;
- return `<section class="full-page profile pf"><div class="pf-hero"><label class="pf-photo" title="Change photo">${photo}<span class="pf-cam">${ico("camera")}</span><input type="file" accept="image/*" hidden onchange="changeAvatar(this.files[0])"></label><h2>${esc(meName())}</h2><p class="pf-user">${esc(u.username||"@user")}</p><p class="pf-mail">${esc(u.email||"")}</p><div class="pf-actions"><button onclick="editProfile()">${ico("user")}<span>Edit profile</span></button><button onclick="openNoteComposer()">${ico("music")}<span>Note</span></button><button onclick="openStatusComposer()">${ico("camera")}<span>Status</span></button></div></div><div class="pf-card">${row("openMemos()","note","My notes","Private notes only you can see")}${row("editProfile()","user","Edit profile","Name and username")}${row("toggleLastSeen()","user","Last seen &amp; online",state.shareLastSeen===false?"Nobody":"Everyone")}${row("enableNotifications()","chat","Notifications",notifStatus())}${row("openSecret()","lock","Secret chats","Hidden chats with your password")}</div><div class="pf-card">${row("toggleTheme()","theme","Appearance",state.theme==="dark"?"Dark":"Light")}${row("installApp()","download","Install app","Add NTalk to your home screen")}${row("forceUpdate()","download","Update app","Version "+APP_VERSION)}${row("alert('Email: '+state.user.email)","user","Account",esc(u.email||""))}</div><button class="pf-logout" onclick="logout()">Log out</button></section>`;
+ return `<section class="full-page profile pf"><div class="pf-hero"><label class="pf-photo" title="Change photo">${photo}<span class="pf-cam">${ico("camera")}</span><input type="file" accept="image/*" hidden onchange="changeAvatar(this.files[0])"></label><h2>${esc(meName())}</h2><p class="pf-user">${esc(u.username||"@user")}</p><p class="pf-mail">${esc(u.email||"")}</p><div class="pf-actions"><button onclick="editProfile()">${ico("user")}<span>Edit profile</span></button><button onclick="openNoteComposer()">${ico("music")}<span>Note</span></button><button onclick="openStatusComposer()">${ico("camera")}<span>Status</span></button></div></div><div class="pf-card">${row("openMemos('profile')","note","My notes","Private notes only you can see")}${row("editProfile()","user","Edit profile","Name and username")}${row("toggleLastSeen()","user","Last seen &amp; online",state.shareLastSeen===false?"Nobody":"Everyone")}${row("enableNotifications()","chat","Notifications",notifStatus())}${row("openSecret()","lock","Secret chats","Hidden chats with your password")}</div><div class="pf-card">${row("toggleTheme()","theme","Appearance",state.theme==="dark"?"Dark":"Light")}${row("installApp()","download","Install app","Add NTalk to your home screen")}${row("forceUpdate()","download","Update app","Version "+APP_VERSION)}${row("alert('Email: '+state.user.email)","user","Account",esc(u.email||""))}</div><button class="pf-logout" onclick="logout()">Log out</button><button class="pf-delete" onclick="openDeleteAccount()">Delete account</button></section>`;
 }
 /* =====================  DISAPPEARING MESSAGES + DELETE FOR EVERYONE  ===================== */
 const DISAPPEAR_OPTS=[[0,"Off"],[5,"5 seconds"],[10,"10 seconds"],[300,"5 minutes"],[86400,"24 hours"]];
@@ -2148,7 +2156,6 @@ function onMessageUpdate(payload){
  render();
 }
 /* =====================  PRIVATE NOTES PAGE (memos)  ===================== */
-let memoSaveTimer=null,memoChain=Promise.resolve();
 const MEMO_COLORS=[["default","Default"],["yellow","Yellow"],["green","Green"],["blue","Blue"],["pink","Pink"],["gray","Gray"]];
 function fmtMemoDate(ts){
  const d=new Date(ts);if(isNaN(d.getTime()))return "";
@@ -2168,8 +2175,8 @@ async function loadMemos(){
  if(error){console.warn("memos",error);state.memosError=error.message;refreshMemoList();return}
  state.memosError="";state.memos=data||[];refreshMemoList();
 }
-function openMemos(){state.page="memos";state.activeChat=null;state.memoQuery="";render();loadMemos()}
-function memosBack(){state.page="profile";render()}
+function openMemos(from){state.memoFrom=from==="profile"?"profile":"chats";state.page="memos";state.activeChat=null;state.secretOpen=false;state.memoQuery="";render();loadMemos()}
+function memosBack(){state.page=state.memoFrom==="profile"?"profile":"chats";render()}
 function memoListHtml(){
  if(state.memosError)return `<div class="empty-small">Could not load your notes.<br><small>${esc(state.memosError)}</small><br>Run supabase_memos.sql in Supabase first.</div>`;
  const q=String(state.memoQuery||"").trim().toLowerCase();
@@ -2183,48 +2190,56 @@ function refreshMemoList(){const el=document.getElementById("memoList");if(el)el
 function memosView(){
  return `<section class="full-page memos"><header class="mm-head"><button class="cp-back" onclick="memosBack()" aria-label="Back">‹</button><h2>Notes</h2><button class="round" onclick="newMemo()" title="New note">${ico("plus")}</button></header><div class="search">${ico("search")}<input id="memoSearch" autocomplete="off" placeholder="Search notes..." value="${esc(state.memoQuery||"")}" oninput="state.memoQuery=this.value;refreshMemoList()"></div><div id="memoList" class="mm-list">${memoListHtml()}</div></section>`;
 }
-/* ---- editor ---- */
+/* ---- editor (you save it yourself) ---- */
 function newMemo(){openMemoEditor({id:null,title:"",body:"",color:"default",pinned:false})}
 function openMemo(id){const m=(state.memos||[]).find(x=>x.id===id);if(m)openMemoEditor({...m})}
 function openMemoEditor(m){
  document.getElementById("memoEditor")?.remove();
- state.memoEdit={id:m.id||null,title:m.title||"",body:m.body||"",color:m.color||"default",pinned:!!m.pinned,dirty:false};
- document.body.insertAdjacentHTML("beforeend",`<div id="memoEditor" class="mpage mc-${esc(state.memoEdit.color)}"><header class="mp-head"><button class="cp-back" onclick="closeMemoEditor()" aria-label="Back">‹</button><span id="mpStatus" class="mp-status"></span><button id="mpPin" class="mp-ic" onclick="toggleMemoPin()" title="Pin">📌</button><button class="mp-ic" onclick="openMemoColors()" title="Colour">🎨</button><button class="mp-ic" onclick="deleteMemoFromEditor()" title="Delete">${ico("trash")}</button></header><div class="mp-body"><input id="mpTitle" class="mp-title" maxlength="120" placeholder="Title" value="${esc(state.memoEdit.title)}" oninput="memoChanged()"><textarea id="mpBody" class="mp-text" maxlength="20000" placeholder="Write your note..." oninput="memoChanged()">${esc(state.memoEdit.body)}</textarea></div></div>`);
- paintMemoPin();
+ state.memoEdit={id:m.id||null,title:m.title||"",body:m.body||"",color:m.color||"default",pinned:!!m.pinned,dirty:false,saving:false,rev:0};
+ document.body.insertAdjacentHTML("beforeend",`<div id="memoEditor" class="mpage mc-${esc(state.memoEdit.color)}"><header class="mp-head"><button class="cp-back" onclick="closeMemoEditor()" aria-label="Back">‹</button><span id="mpStatus" class="mp-status"></span><button id="mpPin" class="mp-ic" onclick="toggleMemoPin()" title="Pin">📌</button><button class="mp-ic" onclick="openMemoColors()" title="Colour">🎨</button><button class="mp-ic" onclick="deleteMemoFromEditor()" title="Delete">${ico("trash")}</button><button id="mpSave" class="mp-save" onclick="saveMemoClick()" disabled>Save</button></header><div class="mp-body"><input id="mpTitle" class="mp-title" maxlength="120" placeholder="Title" value="${esc(state.memoEdit.title)}" oninput="memoChanged()"><textarea id="mpBody" class="mp-text" maxlength="20000" placeholder="Write your note..." oninput="memoChanged()">${esc(state.memoEdit.body)}</textarea></div></div>`);
+ paintMemoPin();updateMemoUi();
  if(!m.id)document.getElementById("mpTitle")?.focus();
 }
 function paintMemoPin(){const b=document.getElementById("mpPin"),e=state.memoEdit;if(b&&e)b.classList.toggle("on",!!e.pinned)}
 function setMemoStatus(t){const el=document.getElementById("mpStatus");if(el)el.textContent=t||""}
+function updateMemoUi(){
+ const e=state.memoEdit;if(!e)return;
+ const b=document.getElementById("mpSave");
+ if(b){b.disabled=!e.dirty||e.saving;b.textContent=e.saving?"Saving…":"Save"}
+ setMemoStatus(e.saving?"":e.dirty?"Unsaved changes":(e.id?"Saved ✓":""));
+}
 function readMemoFields(){
  const e=state.memoEdit;if(!e)return;
  const t=document.getElementById("mpTitle"),b=document.getElementById("mpBody");
  if(t)e.title=t.value;if(b)e.body=b.value;
 }
-function memoChanged(){
- const e=state.memoEdit;if(!e)return;
- readMemoFields();e.dirty=true;setMemoStatus("Typing…");
- clearTimeout(memoSaveTimer);memoSaveTimer=setTimeout(()=>saveMemoNow(),700);
+function memoChanged(){const e=state.memoEdit;if(!e)return;readMemoFields();e.dirty=true;e.rev++;updateMemoUi()}
+async function saveMemoClick(){
+ const e=state.memoEdit;
+ const ok=await saveMemoNow();
+ if(!ok&&e&&e.dirty&&state.memoEdit===e)setMemoStatus("Not saved. Check your connection");
 }
-function saveMemoNow(e){
- clearTimeout(memoSaveTimer);
- const target=e||state.memoEdit;if(!target)return memoChain;
- memoChain=memoChain.then(()=>doSaveMemo(target)).catch(err=>console.warn("memo save",err));
- return memoChain;
-}
-async function doSaveMemo(e){
- if(!e.dirty)return;
+async function saveMemoNow(){
+ const e=state.memoEdit;if(!e||e.saving)return false;
+ readMemoFields();
  const title=String(e.title||"").trim(),body=String(e.body||"").trim();
- if(!title&&!body){if(state.memoEdit===e)setMemoStatus("");return}
- e.dirty=false;if(state.memoEdit===e)setMemoStatus("Saving…");
- const row={title:title||null,body:body||null,color:e.color||"default",pinned:!!e.pinned};
- const res=e.id
-  ?await sb.from("memos").update(row).eq("id",e.id).eq("owner_id",uid()).select().single()
-  :await sb.from("memos").insert({...row,owner_id:uid()}).select().single();
- if(res.error){e.dirty=true;if(state.memoEdit===e)setMemoStatus("Not saved. Check your connection");console.warn("memo",res.error);return}
- e.id=res.data.id;upsertLocalMemo(res.data);
- if(state.memoEdit===e)setMemoStatus("Saved ✓");
+ if(!title&&!body){alert("Write something first.");return false}
+ e.saving=true;updateMemoUi();
+ const rev=e.rev,row={title:title||null,body:body||null,color:e.color||"default",pinned:!!e.pinned};
+ let res;
+ try{
+  res=e.id
+   ?await sb.from("memos").update(row).eq("id",e.id).eq("owner_id",uid()).select().single()
+   :await sb.from("memos").insert({...row,owner_id:uid()}).select().single();
+ }catch(err){res={error:err}}
+ e.saving=false;
+ if(res.error){console.warn("memo",res.error);if(state.memoEdit===e)updateMemoUi();return false}
+ e.id=res.data.id;e.dirty=(e.rev!==rev);
+ upsertLocalMemo(res.data);
+ if(state.memoEdit===e)updateMemoUi();
+ return true;
 }
-function toggleMemoPin(){const e=state.memoEdit;if(!e)return;e.pinned=!e.pinned;e.dirty=true;paintMemoPin();saveMemoNow()}
+function toggleMemoPin(){const e=state.memoEdit;if(!e)return;e.pinned=!e.pinned;e.dirty=true;e.rev++;paintMemoPin();updateMemoUi()}
 function openMemoColors(){
  const e=state.memoEdit;if(!e)return;
  closeModal();
@@ -2232,37 +2247,70 @@ function openMemoColors(){
 }
 function setMemoColor(k){
  const e=state.memoEdit;if(!e)return;
- e.color=k;e.dirty=true;
- const el=document.getElementById("memoEditor");
- if(el)el.className="mpage mc-"+k;
- closeModal();saveMemoNow();
+ e.color=k;e.dirty=true;e.rev++;
+ const el=document.getElementById("memoEditor");if(el)el.className="mpage mc-"+k;
+ closeModal();updateMemoUi();
 }
-function closeMemoEditor(){
- const el=document.getElementById("memoEditor"),e=state.memoEdit;
+function closeMemoEditor(force){
+ const e=state.memoEdit;
  if(e)readMemoFields();
- if(el)el.remove();
+ if(e&&e.dirty&&!force&&(String(e.title||"").trim()||String(e.body||"").trim())){askSaveMemo();return}
+ document.getElementById("memoEditor")?.remove();
  state.memoEdit=null;
- if(e)finalizeMemo(e);
 }
-async function finalizeMemo(e){
- clearTimeout(memoSaveTimer);
- const empty=!String(e.title||"").trim()&&!String(e.body||"").trim();
- if(empty){
-  if(e.id){await memoChain;const {error}=await sb.from("memos").delete().eq("id",e.id).eq("owner_id",uid());if(!error)removeLocalMemo(e.id)}
-  return;
- }
- if(e.dirty)await saveMemoNow(e);
+function askSaveMemo(){
+ closeModal();
+ document.body.insertAdjacentHTML("beforeend",`<div id="modalRoot" class="modal-back over-story" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>Save changes?</h3><p class="muted">This note has changes that are not saved yet.</p><div class="modal-actions"><button class="m-danger" onclick="memoDiscard()">Discard</button><button class="m-ok" onclick="memoSaveAndClose()">Save</button></div></div></div>`);
+}
+function memoDiscard(){closeModal();closeMemoEditor(true)}
+async function memoSaveAndClose(){
+ const ok=await saveMemoNow();
+ closeModal();
+ if(ok)closeMemoEditor(true);else alert("Could not save the note. Check your connection.");
 }
 async function deleteMemoFromEditor(){
  const e=state.memoEdit;if(!e)return;
  if(!confirm("Delete this note?"))return;
- clearTimeout(memoSaveTimer);
  document.getElementById("memoEditor")?.remove();
  state.memoEdit=null;
- await memoChain;
  if(e.id){
   const {error}=await sb.from("memos").delete().eq("id",e.id).eq("owner_id",uid());
   if(error)alert(error.message);else removeLocalMemo(e.id);
+ }
+}
+/* =====================  DELETE ACCOUNT  ===================== */
+function openDeleteAccount(){
+ closeModal();
+ document.body.insertAdjacentHTML("beforeend",`<div id="modalRoot" class="modal-back over-story" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>Delete account?</h3><p class="muted">This cannot be undone.<br>• Your account, profile and photo are removed.<br>• <b>All your messages are deleted for everyone.</b><br>• Your private chats are deleted.<br>• You are removed from all groups.<br>• Your statuses, notes, shorts and files are deleted.</p><p class="muted">Type <b>DELETE</b> to confirm.</p><input id="delConfirm" class="m-input" autocomplete="off" autocapitalize="characters" placeholder="DELETE" oninput="document.getElementById('delGo').disabled=this.value.trim()!=='DELETE'"><div class="modal-actions"><button class="m-cancel" onclick="closeModal()">Cancel</button><button id="delGo" class="m-danger" disabled onclick="deleteAccountNow()">Delete forever</button></div></div></div>`);
+}
+async function deleteMyFiles(){
+ for(const bucket of ["ntalk-media","ntalk-avatars"]){
+  for(let i=0;i<20;i++){
+   const {data,error}=await sb.storage.from(bucket).list(uid(),{limit:100});
+   if(error||!data||!data.length)break;
+   const paths=data.filter(f=>f&&f.name).map(f=>`${uid()}/${f.name}`);
+   if(!paths.length)break;
+   const r=await sb.storage.from(bucket).remove(paths);
+   if(r&&r.error)break;
+  }
+ }
+}
+async function deleteAccountNow(){
+ const typed=document.getElementById("delConfirm");
+ if(!typed||typed.value.trim()!=="DELETE")return;
+ const btn=document.getElementById("delGo");
+ if(btn){btn.disabled=true;btn.textContent="Deleting…"}
+ try{
+  try{await deleteMyFiles()}catch(e){console.warn("file clean-up",e)}
+  const {error}=await sb.rpc("delete_my_account");
+  if(error)throw error;
+  closeModal();
+  await logout();
+  try{Object.keys(localStorage).filter(k=>k.startsWith("sb-")||k.startsWith("ntalk_")).forEach(k=>localStorage.removeItem(k))}catch{}
+  alert("Your account has been deleted.");
+ }catch(e){
+  if(btn){btn.disabled=false;btn.textContent="Delete forever"}
+  alert("Could not delete the account: "+(e.message||e)+"\nRun supabase_delete_account.sql in Supabase first.");
  }
 }
 async function initBackend(){ await loadNicknames(); await loadPrefs();
