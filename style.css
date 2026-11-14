@@ -587,3 +587,69 @@ body[data-theme="light"] .mc-gray{--mc:#e6e8ec}
 
 /* ===== NTalk: delete account link ===== */
 .pf-delete{display:block;margin:12px 12px 0;width:calc(100% - 24px);padding:12px;background:transparent;color:var(--muted);font-size:13px;text-decoration:underline}
+
+/* =====================================================================
+   NTalk 3D look (CSS only): raised buttons, layered cards, depth, 3D login
+   ===================================================================== */
+:root{
+  --e3d:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -3px 0 rgba(0,0,0,.30),0 8px 16px rgba(0,0,0,.30);
+  --e3d-down:inset 0 1px 0 rgba(255,255,255,.14),inset 0 -1px 0 rgba(0,0,0,.30),0 2px 4px rgba(0,0,0,.32);
+  --card3d:inset 0 1px 0 rgba(255,255,255,.07),0 14px 28px rgba(0,0,0,.30),0 3px 6px rgba(0,0,0,.22);
+}
+body[data-theme="light"]{
+  --e3d:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -3px 0 rgba(0,0,0,.18),0 8px 16px rgba(30,40,70,.22);
+  --e3d-down:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -1px 0 rgba(0,0,0,.18),0 2px 4px rgba(30,40,70,.25);
+  --card3d:inset 0 1px 0 rgba(255,255,255,.9),0 14px 28px rgba(30,40,70,.16),0 3px 6px rgba(30,40,70,.12);
+}
+/* raised buttons that sink when pressed */
+.round,.primary,.send,.m-ok,.mp-save,.btn3d,.call-actions button,.cp-actions button,.pf-actions button{
+  box-shadow:var(--e3d);transition:transform .12s ease,box-shadow .12s ease;
+}
+.round:active,.primary:active,.send:active,.m-ok:active,.mp-save:active,.btn3d:active,
+.call-actions button:active,.cp-actions button:active,.pf-actions button:active{
+  transform:translateY(3px);box-shadow:var(--e3d-down);
+}
+/* layered cards */
+.pf-card,.cp-card,.mm-card,.settings-card,.call-card,.incoming-card,.pf-hero .pf-actions button{box-shadow:var(--card3d)}
+/* bubbles with depth */
+.bubble{box-shadow:0 2px 0 rgba(0,0,0,.18),0 8px 14px rgba(0,0,0,.18)}
+.bubble.deleted,.typing-bub{box-shadow:none}
+/* rows lift when touched */
+.chat-row{transition:transform .15s ease,box-shadow .15s ease}
+.chat-row:active{transform:translateY(-2px) scale(1.01);box-shadow:0 12px 24px rgba(0,0,0,.32)}
+/* avatars look like small spheres */
+.avatar,.pf-photo,.cp-photo{box-shadow:inset 0 2px 3px rgba(255,255,255,.32),inset 0 -5px 8px rgba(0,0,0,.25),0 5px 10px rgba(0,0,0,.30)}
+/* the selected tab pops up */
+.sidebar nav button.selected{transform:translateY(-3px);box-shadow:var(--e3d)}
+.sidebar nav button{transition:transform .15s ease,box-shadow .15s ease}
+/* pop-ups and full pages come in with a 3D turn (created once, so no flicker) */
+.modal{animation:modalPop3d .28s cubic-bezier(.2,.9,.3,1.2) backwards;box-shadow:0 24px 60px rgba(0,0,0,.45)}
+.cpage,.mpage{animation:pageIn3d .3s ease backwards}
+@keyframes modalPop3d{from{opacity:0;transform:perspective(800px) translateY(26px) rotateX(16deg) scale(.96)}to{opacity:1;transform:none}}
+@keyframes pageIn3d{from{opacity:0;transform:perspective(900px) translateX(34px) rotateY(-14deg)}to{opacity:1;transform:none}}
+
+/* ---------- login pages ---------- */
+.auth3d{perspective:1100px}
+.auth3d .auth-card{position:relative}
+.card3d{transform-style:preserve-3d;transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .15s ease-out;box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 34px 60px rgba(0,0,0,.45),0 8px 16px rgba(0,0,0,.30)}
+body[data-theme="light"] .card3d{box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 34px 60px rgba(30,40,70,.22),0 8px 16px rgba(30,40,70,.14)}
+.cube-scene{width:104px;height:104px;margin:30px auto 22px;perspective:640px}
+.cube{position:relative;width:100%;height:100%;transform-style:preserve-3d;animation:cubeSpin3d 16s linear infinite}
+.cf{position:absolute;inset:0;display:grid;place-items:center;font-size:52px;font-weight:800;color:#fff;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:inset 0 0 18px rgba(0,0,0,.25)}
+.f1{transform:translateZ(52px)}
+.f2{transform:rotateY(90deg) translateZ(52px);filter:brightness(.88)}
+.f3{transform:rotateY(180deg) translateZ(52px);filter:brightness(.78)}
+.f4{transform:rotateY(-90deg) translateZ(52px);filter:brightness(.88)}
+.f5{transform:rotateX(90deg) translateZ(52px);filter:brightness(1.12)}
+.f6{transform:rotateX(-90deg) translateZ(52px);filter:brightness(.7)}
+@keyframes cubeSpin3d{from{transform:rotateX(-22deg) rotateY(0deg)}to{transform:rotateX(-22deg) rotateY(360deg)}}
+.auth-title{text-align:center;font-size:34px;margin:0}
+.auth-sub{text-align:center;color:var(--muted);margin:4px 0 18px}
+.email-trigger{cursor:pointer;box-shadow:inset 0 3px 7px rgba(0,0,0,.32);text-align:left}
+.auth-back{position:absolute;left:14px;top:14px;width:40px;height:40px;border-radius:50%;background:var(--panel-soft);color:var(--text);font-size:24px;line-height:1;box-shadow:var(--e3d)}
+.home-links{text-align:center;margin:8px 0 0}
+.link-small{background:none !important;border:0 !important;box-shadow:none !important;padding:8px 10px;width:auto;color:var(--accent2);font-size:13px;text-decoration:underline;cursor:pointer}
+@media (prefers-reduced-motion:reduce){
+  .cube,.modal,.cpage,.mpage{animation:none !important}
+  .round,.primary,.chat-row,.btn3d{transition:none !important}
+}

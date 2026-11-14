@@ -52,32 +52,6 @@ function ico(name,filled){
   return `<svg class="ui-icon${filled?" filled":""}" viewBox="0 0 24 24" aria-hidden="true">${p[name] || EXTRA_ICONS[name] || p.chat}</svg>`;
 }
 
-function loginView(){
- return `<main class="auth"><section class="auth-card">
- <div class="brand"><div class="logo">N</div><div><h1>NTalk</h1><p>Private. Real-time. Simple.</p></div></div>
- <div class="auth-tabs"><button class="active">Login</button><button onclick="registerMode()">Create account</button></div>
- <label>Email</label><input id="email" type="email" autocomplete="email" placeholder="you@example.com">
- <label>Password</label><input id="password" type="password" autocomplete="current-password" placeholder="Your password">
- <button class="primary wide" onclick="doLogin()">Login</button>
- <button class="ghost wide" onclick="forgotPassword()">Forgot password?</button>
- <div class="auth-or">or</div>
- <button class="ghost wide g-btn" onclick="googleLogin()">${GOOGLE_SVG}<span>Continue with Google</span></button>
- <p class="muted center">${hasSupabase?"Connected to NTalk backend":"Supabase configuration missing"}</p>
- </section></main>`;
-}
-function registerMode(){
- app.innerHTML=`<main class="auth"><section class="auth-card">
- <div class="brand"><div class="logo">N</div><div><h1>NTalk</h1><p>Create your account</p></div></div>
- <label>Display name</label><input id="name" placeholder="Your name">
- <label>Username</label><input id="username" placeholder="@yourname">
- <label>Email</label><input id="email" type="email" placeholder="you@example.com">
- <label>Password</label><input id="password" type="password" placeholder="At least 6 characters">
- <button class="primary wide" onclick="doRegister()">Create account</button>
- <div class="auth-or">or</div>
- <button class="ghost wide g-btn" onclick="googleLogin()">${GOOGLE_SVG}<span>Continue with Google</span></button>
- <button class="ghost wide" onclick="render()">Back to login</button>
- </section></main>`;
-}
 async function forgotPassword(){
  if(!hasSupabase)return alert("Supabase configuration missing.");
  const typed=document.getElementById("email")?.value.trim()||"";
@@ -140,7 +114,7 @@ async function logout(){
  try{if(state.channel)await sb.removeChannel(state.channel);if(state.presence)await sb.removeChannel(state.presence);if(state.signal)await sb.removeChannel(state.signal);if(state.typingCh)await sb.removeChannel(state.typingCh);await unregisterPush();await sb.auth.signOut();}catch{}
  clearInterval(state.lsTimer);state.lsTimer=null;state.pushActive=false;state.replyTo=null;state.statuses=[];state.statusMine=null;stopRing();
  state.channel=null;state.channelUser=null;state.typingCh=null;state.typingUser=null;state.presence=null;state.signal=null;state.activeChat=null;state.page="chats";state.chatTab="chats";
- state.user=null; state.chats=[]; state.people=[]; state.messages=[]; localStorage.removeItem("ntalk_user"); endCall(false); leaveGroupCall(false); dismissGroupInvite(); state.callLogs=[]; state.prefs=new Map(); state.notes=new Map(); state.secretIds=new Set(); state.secretUnlocked=false; state.secretOpen=false; state.hasSecretPin=null; state.shortsMounted=false; state.searchResults=[]; state.peopleQuery=""; render();
+ state.user=null; state.chats=[]; state.people=[]; state.messages=[]; localStorage.removeItem("ntalk_user"); endCall(false); leaveGroupCall(false); dismissGroupInvite(); state.loginStep="home"; state.callLogs=[]; state.prefs=new Map(); state.notes=new Map(); state.secretIds=new Set(); state.secretUnlocked=false; state.secretOpen=false; state.hasSecretPin=null; state.shortsMounted=false; state.searchResults=[]; state.peopleQuery=""; render();
 }
 function setTheme(t){state.theme=t;localStorage.setItem("ntalk_theme",t);render()}
 function toggleTheme(){setTheme(state.theme==="dark"?"light":"dark")}
@@ -1873,6 +1847,7 @@ function nativeApp(){
 }
 function layerCount(){
  let n=0;
+ if(!state.user&&(state.loginStep==="signin"||state.loginStep==="register"))n++;
  if(document.getElementById("mediaView"))n++;
  if(document.getElementById("storyView"))n++;
  if(document.getElementById("modalRoot"))n++;
@@ -1886,6 +1861,7 @@ function layerCount(){
  return n;
 }
 function topLayerClose(){
+ if(!state.user&&state.loginStep&&state.loginStep!=="home"){state.loginStep="home";render();return true}
  if(document.getElementById("mediaView")){closeMedia();return true}
  if(document.getElementById("storyView")){closeStory();return true}
  if(document.getElementById("modalRoot")){if(secretResolve)secretCancel();else closeModal();return true}
@@ -1903,7 +1879,7 @@ function ensureGuard(){
 }
 function syncNav(){
  if(nav.native||nav.busy)return;
- const want=state.user?layerCount():0;
+ const want=layerCount();
  try{
   if(nav.depth<want){
    ensureGuard();
@@ -1927,7 +1903,7 @@ function setupBackNav(){
   nav.native=true;
   NA.addListener("backButton",()=>{
    if(document.getElementById("exitDlg")){NA.exitApp();return}
-   if(state.user&&topLayerClose())return;
+   if(topLayerClose())return;
    showExitDialog();
   });
   return;
@@ -2313,6 +2289,69 @@ async function deleteAccountNow(){
   alert("Could not delete the account: "+(e.message||e)+"\nRun supabase_delete_account.sql in Supabase first.");
  }
 }
+/* =====================  LOGIN PAGES (3D)  ===================== */
+function cubeHtml(){
+ return `<div class="cube-scene" aria-hidden="true"><div class="cube"><div class="cf f1">N</div><div class="cf f2">N</div><div class="cf f3">N</div><div class="cf f4">N</div><div class="cf f5">N</div><div class="cf f6">N</div></div></div>`;
+}
+function loginView(){
+ return `<main class="auth auth3d"><section class="auth-card card3d">
+ ${cubeHtml()}
+ <h1 class="auth-title">NTalk</h1><p class="auth-sub">Private. Real-time. Simple.</p>
+ <input id="homeEmail" class="email-trigger" type="email" readonly placeholder="Email" aria-label="Email" onfocus="openSignin()" onclick="openSignin()">
+ <div class="auth-or">or</div>
+ <button class="ghost wide g-btn btn3d" onclick="googleLogin()">${GOOGLE_SVG}<span>Continue with Google</span></button>
+ <button class="ghost wide btn3d" onclick="demoLogin()">Demo login</button>
+ <p class="home-links"><button class="link-small" type="button" onclick="registerMode()">Create account</button></p>
+ <p class="muted center">${hasSupabase?"Connected to NTalk backend":"Supabase configuration missing"}</p>
+ </section></main>`;
+}
+function signinView(){
+ return `<main class="auth auth3d"><section class="auth-card card3d">
+ <button class="auth-back" type="button" onclick="goLoginHome()" aria-label="Back">‹</button>
+ <h1 class="auth-title">Welcome back</h1><p class="auth-sub">Login with your email</p>
+ <label>Email</label><input id="email" type="email" autocomplete="email" placeholder="you@example.com">
+ <label>Password</label><input id="password" type="password" autocomplete="current-password" placeholder="Your password" onkeydown="if(event.key==='Enter')doLogin()">
+ <button class="primary wide btn3d" onclick="doLogin()">Login</button>
+ <p class="home-links"><button class="link-small" type="button" onclick="forgotPassword()">Forgot password?</button></p>
+ </section></main>`;
+}
+function registerView(){
+ return `<main class="auth auth3d"><section class="auth-card card3d">
+ <button class="auth-back" type="button" onclick="goLoginHome()" aria-label="Back">‹</button>
+ <h1 class="auth-title">Create account</h1><p class="auth-sub">Join NTalk</p>
+ <label>Display name</label><input id="name" placeholder="Your name">
+ <label>Username</label><input id="username" placeholder="@yourname">
+ <label>Email</label><input id="email" type="email" placeholder="you@example.com">
+ <label>Password</label><input id="password" type="password" placeholder="At least 6 characters">
+ <button class="primary wide btn3d" onclick="doRegister()">Create account</button>
+ <div class="auth-or">or</div>
+ <button class="ghost wide g-btn btn3d" onclick="googleLogin()">${GOOGLE_SVG}<span>Continue with Google</span></button>
+ </section></main>`;
+}
+function registerMode(){state.loginStep="register";render()}
+function goLoginHome(){state.loginStep="home";render()}
+function openSignin(){
+ if(state.loginStep==="signin")return;
+ state.loginStep="signin";render();
+ setTimeout(()=>document.getElementById("email")?.focus(),60);
+}
+async function demoLogin(){
+ if(!hasSupabase)return alert("Supabase is not configured.");
+ const em=cfg.DEMO_EMAIL,pw=cfg.DEMO_PASSWORD;
+ if(!em||!pw)return alert("The demo account is not set up yet.\n\n1) Supabase → Authentication → Users → Add user (tick Auto Confirm User).\n2) Put DEMO_EMAIL and DEMO_PASSWORD in config.js.");
+ const {data,error}=await sb.auth.signInWithPassword({email:em,password:pw});
+ if(error)return alert("Demo login failed: "+error.message);
+ state.loginStep="home";
+ await loadProfile(data.user);await initBackend();render();
+}
+function setupTilt(){
+ document.addEventListener("pointermove",e=>{
+  if(e.pointerType==="touch"||state.user)return;
+  const c=document.querySelector(".card3d");if(!c)return;
+  const r=c.getBoundingClientRect(),x=(e.clientX-(r.left+r.width/2))/r.width,y=(e.clientY-(r.top+r.height/2))/r.height;
+  c.style.setProperty("--rx",(-y*8).toFixed(2)+"deg");c.style.setProperty("--ry",(x*10).toFixed(2)+"deg");
+ },{passive:true});
+}
 async function initBackend(){ await loadNicknames(); await loadPrefs();
  await loadPeople();await loadChats();
  await subscribeMessageChannel();await setupTyping();await initPresence();await setupSignaling();
@@ -2330,7 +2369,7 @@ function render(){
  const hideNav=!!state.user&&(state.page==="shorts"||(state.activeChat!==null&&(state.page==="chats"||state.page==="groups")));
  document.body.classList.toggle("in-chat",hideNav);
  if(recoveryMode){app.innerHTML=resetView();return}
- if(!state.user){app.innerHTML=loginView();return}
+ if(!state.user){app.innerHTML=state.loginStep==="signin"?signinView():state.loginStep==="register"?registerView():loginView();syncNav();return}
  if(state.user.needsSetup){app.innerHTML=setupView();return}
  if(state.page!=="chats")state.secretOpen=false;
  const center=state.page==="calls"?callsView():state.page==="groups"?groupsView():state.page==="profile"?profileView():state.page==="shorts"?shortsView():state.page==="memos"?memosView():chatList();
@@ -2350,6 +2389,7 @@ window.addEventListener("load",async()=>{
  setupMsgGestures();
  setupRowGestures();
  setupPwToggles();
+ setupTilt();
  setupBackNav();
  injectCriticalCss();
  document.addEventListener("visibilitychange",()=>{if(!state.user)return;rawTouch();if(document.hidden){clearTimeout(state._lockT);state._lockT=setTimeout(()=>{if(state.secretUnlocked||state.secretOpen)lockSecret()},60000)}else clearTimeout(state._lockT);if(!document.hidden){const c=state.chats[state.activeChat];if(c){c.unread=0;if(!c.is_group)markSeen(c.id)}updateBadge()}});
